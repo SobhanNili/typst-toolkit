@@ -1,0 +1,2 @@
+main = ["main.typ"]
+ppi = 80          # slides are large; 80 ppi keeps renders readable but cheap

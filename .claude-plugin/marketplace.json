@@ -1,0 +1,14 @@
+{
+  "name": "typst-toolkit",
+  "description": "Local marketplace for the Typst toolkit plugin.",
+  "owner": {
+    "name": "Sobhan Nili"
+  },
+  "plugins": [
+    {
+      "name": "typst-toolkit",
+      "source": "./",
+      "description": "Grounded Typst authoring: docs mirror, package lookup, compile/lint hooks, visual feedback loop."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Typst toolkit: compile+lint after edits to Typst projects, block finishing with a broken build, keep the docs mirror fresh.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ttk\" hook post", "timeout": 120 }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ttk\" hook stop", "timeout": 180 }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/ttk\" hook session", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

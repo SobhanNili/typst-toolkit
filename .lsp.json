@@ -1,0 +1,16 @@
+{
+  "tinymist": {
+    "command": "${CLAUDE_PLUGIN_ROOT}/bin/ttk-tinymist",
+    "args": ["lsp"],
+    "extensionToLanguage": { ".typ": "typst" },
+    "initializationOptions": {
+      "exportPdf": "never",
+      "formatterMode": "typstyle",
+      "lint": { "enabled": true },
+      "semanticTokens": "disable"
+    },
+    "startupTimeout": 30000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  }
+}

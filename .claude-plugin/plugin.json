@@ -1,0 +1,24 @@
+{
+  "name": "typst-toolkit",
+  "version": "0.1.0",
+  "description": "Grounded Typst authoring for Claude Code: offline official docs + symbol table, package API/docs lookup, project-aware compile checks with tinymist lint, LaTeX-habit detection, and a render/zoom/compare visual feedback loop.",
+  "author": {
+    "name": "Sobhan Nili"
+  },
+  "license": "MIT",
+  "keywords": [
+    "typst",
+    "tinymist",
+    "typesetting",
+    "documents",
+    "figures",
+    "cetz"
+  ],
+  "network": {
+    "hosts": [
+      "typst.app",
+      "packages.typst.org"
+    ]
+  },
+  "icon": ".claude-plugin/icon.png"
+}

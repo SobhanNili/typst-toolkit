@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Resolve tinymist: $TTK_TINYMIST, PATH, or the newest VS Code-family extension bundle.
+if [ -n "$TTK_TINYMIST" ] && [ -x "$TTK_TINYMIST" ]; then exec "$TTK_TINYMIST" "$@"; fi
+if command -v tinymist >/dev/null 2>&1; then exec tinymist "$@"; fi
+best=$(ls -d "$HOME"/.vscode-server/extensions/myriad-dreamin.tinymist-*/out/tinymist \
+              "$HOME"/.vscode/extensions/myriad-dreamin.tinymist-*/out/tinymist \
+              "$HOME"/.cursor-server/extensions/myriad-dreamin.tinymist-*/out/tinymist 2>/dev/null | sort -V | tail -1)
+if [ -n "$best" ]; then exec "$best" "$@"; fi
+echo "ttk-tinymist: tinymist not found (install it or set TTK_TINYMIST)" >&2
+exit 127

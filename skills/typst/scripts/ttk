@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""ttk — Typst toolkit for coding agents. Run `ttk <command> -h` for details."""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(os.path.realpath(__file__)).parent))
+
+
+def doctor(args):
+    from ttk_common import CACHE, find_tinymist, find_typst, run, typst_version
+    from ttk_docs import cmd_status
+    from ttk_pkg import cache_dir, data_dir
+    t = find_typst()
+    print(f"typst:    {t or 'NOT FOUND'}  {typst_version() or ''}")
+    if t and (t.startswith("/snap/") or os.path.realpath(t).endswith("/snap")):
+        print("          (snap build: can only read non-hidden paths under $HOME; ttk falls back to tinymist elsewhere)")
+    tm = find_tinymist()
+    ver = ""
+    if tm:
+        _, so, _ = run([tm, "--version"])
+        ver = next((l.split(":", 1)[1].strip() for l in so.splitlines() if l.startswith("Typst Version")), "")
+    print(f"tinymist: {tm or 'NOT FOUND'}  {'(bundles typst ' + ver + ')' if ver else ''}")
+    print(f"packages: data {data_dir()} | cache {cache_dir()}")
+    cmd_status()
+    print(f"ttk cache: {CACHE}")
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="ttk", description=__doc__)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("doctor", help="show toolchain status")
+
+    # docs
+    d = sub.add_parser("docs", help="official Typst docs (local mirror of typst.app/docs)")
+    ds = d.add_subparsers(dest="dcmd", required=True)
+    x = ds.add_parser("sync", help="download/refresh the local docs mirror (~10s)")
+    x.add_argument("--force", action="store_true")
+    x = ds.add_parser("search", help="regex search over all docs pages")
+    x.add_argument("pattern")
+    x.add_argument("-n", type=int, default=8, help="max pages")
+    x.add_argument("--files", action="store_true", help="only list matching pages")
+    x.add_argument("--case", action="store_true", help="case sensitive")
+    x.add_argument("--within", help="restrict to a path prefix, e.g. reference/layout or guides")
+    x = ds.add_parser("show", help="print a docs page: name (rect, grid, text) or path (reference/layout/grid)")
+    x.add_argument("name")
+    x.add_argument("-s", "--section", help="only this section/parameter, e.g. -s columns")
+    x.add_argument("--outline", action="store_true", help="only list headings")
+    x = ds.add_parser("fetch", help="fetch one page live (url or docs path)")
+    x.add_argument("url")
+    x = ds.add_parser("sym", help="find a symbol by Typst name, LaTeX command (\\leq) or Unicode name words")
+    x.add_argument("query")
+    x.add_argument("-n", type=int, default=12)
+    ds.add_parser("status")
+    ds.add_parser("path", help="print the mirror directory (for grep/Read)")
+
+    # packages
+    k = sub.add_parser("pkg", help="Typst Universe packages")
+    ks = k.add_subparsers(dest="pcmd", required=True)
+    x = ks.add_parser("search", help="search package index by name/description/keywords")
+    x.add_argument("query", nargs="+")
+    x.add_argument("-n", type=int, default=12)
+    for name, hlp in (("info", "metadata, versions, links, exports"), ("fetch", "download into the package cache"),
+                      ("readme", "print README"), ("path", "print local path (downloads if needed)")):
+        x = ks.add_parser(name, help=hlp)
+        x.add_argument("spec", help="cetz | cetz:0.3.4 | @preview/cetz:0.3.4")
+    x = ks.add_parser("api", help="list exports, or show signature + doc comments of a symbol")
+    x.add_argument("spec")
+    x.add_argument("symbol", nargs="?")
+    x.add_argument("--body", action="store_true", help="show more of the definition body")
+    x = ks.add_parser("grep", help="regex search through package sources/docs")
+    x.add_argument("spec")
+    x.add_argument("pattern")
+    x.add_argument("-n", type=int, default=40)
+    x = ks.add_parser("docs", help="generate full API docs with tinymist (writes a .md file)")
+    x.add_argument("spec")
+    x = ks.add_parser("deps", help="list package imports of a project: cached? outdated?")
+    x.add_argument("path", nargs="?", default=".")
+
+    # project / build
+    x = sub.add_parser("project", help="show root, entrypoints, include/import graph, packages")
+    x.add_argument("path", nargs="?")
+    x = sub.add_parser("check", help="compile + lint the entrypoint(s) affected by a file; LaTeX-ism scan")
+    x.add_argument("path", nargs="?")
+    x.add_argument("--main", action="append", help="entrypoint(s) to compile (default: auto)")
+    x.add_argument("--no-lint", action="store_true")
+    x.add_argument("--no-latex", action="store_true")
+    x = sub.add_parser("render", help="render pages to PNG for visual inspection")
+    x.add_argument("file", help="entrypoint or any file of the project")
+    x.add_argument("--main")
+    x.add_argument("-p", "--pages", help="e.g. 1 | 2,4 | 3-5")
+    x.add_argument("--ppi", type=int)
+    x.add_argument("--sheet", action="store_true", help="also build a contact sheet of all rendered pages")
+    x.add_argument("--cols", type=int)
+    x.add_argument("--max-pages", type=int, default=4, help="above this, show a contact sheet instead")
+    x.add_argument("--compare", action="store_true", help="side-by-side before/after vs previous render")
+    x.add_argument("--region", help="zoom: x0,y0,x1,y1 page fractions (renders one page at high ppi and crops)")
+    x = sub.add_parser("snippet", help="render code (arg/stdin) or a figure file on an auto-sized page")
+    x.add_argument("file", nargs="?", help="figure .typ file to include (else code from -e or stdin)")
+    x.add_argument("-e", "--code")
+    x.add_argument("--dir", help="project directory to render in (default: cwd)")
+    x.add_argument("--preamble", help="code inserted before the snippet, e.g. imports")
+    x.add_argument("--name")
+    x.add_argument("--ppi", type=int, default=180)
+    x.add_argument("--width", default="auto", help="page width (auto, 12cm, ...)")
+    x.add_argument("--margin", default="8pt")
+    x.add_argument("--fill", default="white")
+    x = sub.add_parser("outline", help="headings/figures/labels with page numbers (typst eval)")
+    x.add_argument("file")
+    x.add_argument("--main")
+    x.add_argument("--expr", help="custom typst eval expression in the document's context")
+    x = sub.add_parser("latex-scan", help="find LaTeX habits that compile silently but render wrong")
+    x.add_argument("files", nargs="+")
+
+    x = sub.add_parser("hook", help=argparse.SUPPRESS)
+    x.add_argument("kind", choices=["post", "stop", "session"])
+    return p
+
+
+def main():
+    args = build_parser().parse_args()
+    if args.cmd == "doctor":
+        doctor(args)
+    elif args.cmd == "docs":
+        import ttk_docs
+        ttk_docs.main(args)
+    elif args.cmd == "pkg":
+        import ttk_pkg
+        ttk_pkg.main(args)
+    elif args.cmd == "hook":
+        import ttk_hooks
+        ttk_hooks.main(args.kind)
+    else:
+        import ttk_build as b
+        if args.cmd == "latex-scan":
+            bad = False
+            for f in args.files:
+                for i in b.scan_latex(Path(f)):
+                    print(f"{f}: {i}")
+                    bad = True
+            sys.exit(1 if bad else 0)
+        {"project": b.cmd_project, "check": b.cmd_check, "render": b.cmd_render,
+         "snippet": b.cmd_snippet, "outline": b.cmd_outline}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except BrokenPipeError:
+        sys.exit(0)

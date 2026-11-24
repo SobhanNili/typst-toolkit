@@ -1,0 +1,7 @@
+# Optional per-project config for the typst toolkit (ttk). Without it, entrypoints are guessed.
+main = ["main.typ"]          # entrypoint(s), relative to this file
+# root = "."                 # compiler --root (for "/abs" paths); default: this directory
+# font-paths = ["fonts"]
+# ppi = 110                  # default render resolution
+# [inputs]                   # sys.inputs
+# draft = "true"
