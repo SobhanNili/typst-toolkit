@@ -22,25 +22,50 @@ A Claude Code plugin that makes Claude reliable at Typst. It:
 
 Network access is used only for `typst.app` (docs mirror) and `packages.typst.org` (package index and downloads).
 
-### Install from the git repository
+### Install from GitHub
+
+The plugin is distributed from the `main` branch of
+[SobhanNili/typst-toolkit](https://github.com/SobhanNili/typst-toolkit), which is the single source of truth.
+You don't need a clone to use it.
 
 ```bash
-# 1. Get the code
-git clone <repo-url> ~/typst-toolkit        # or use your existing checkout
+# 1. Register the GitHub repo as a plugin marketplace (tracks its default branch, main)
+claude plugin marketplace add SobhanNili/typst-toolkit
 
-# 2. Register the repo as a local plugin marketplace, then install the plugin from it
-claude plugin marketplace add ~/typst-toolkit
+# 2. Install the plugin from it
 claude plugin install typst-toolkit@typst-toolkit
 
 # 3. Restart Claude Code (or run /reload-plugins inside a session)
-
-# 4. Verify
-~/typst-toolkit/bin/ttk doctor
-~/typst-toolkit/bin/ttk docs sync           # optional; the SessionStart hook does it in the background
 ```
 
-If the repo is hosted on GitHub, `claude plugin marketplace add <owner>/<repo>` also works without cloning.
-To update after pulling new commits, run `claude plugin update typst-toolkit@typst-toolkit` and restart.
+The same can be done inside a session with `/plugin marketplace add SobhanNili/typst-toolkit` and
+`/plugin install typst-toolkit@typst-toolkit`.
+
+**Verify.** `ttk` is on Claude's PATH while the plugin is enabled, so ask Claude to run `ttk doctor`.
+From your own shell, use the installed copy:
+
+```bash
+~/.claude/plugins/cache/typst-toolkit/typst-toolkit/*/bin/ttk doctor
+~/.claude/plugins/cache/typst-toolkit/typst-toolkit/*/bin/ttk docs sync   # optional; SessionStart does it in the background
+```
+
+### Updating
+
+Installed plugins are versioned copies. A new release is picked up when `version` in
+`.claude-plugin/plugin.json` on `main` has been bumped:
+
+```bash
+claude plugin marketplace update typst-toolkit     # fetch the latest main
+claude plugin update typst-toolkit@typst-toolkit   # install the new version
+# then restart Claude Code (or /reload-plugins)
+```
+
+**Switching from an earlier local-folder install.** Both marketplaces are named `typst-toolkit`, so remove
+the local one first, then run the two install commands above:
+
+```bash
+claude plugin marketplace remove typst-toolkit
+```
 
 `ttk doctor` should show something like:
 
@@ -68,7 +93,7 @@ docs mirror: ~/.cache/typst-toolkit/docs/0.15.1 | version 0.15.1 | 218 pages | 0
 | Component | What it does |
 |---|---|
 | **Skill** `typst` | The workflow Claude follows for Typst work. It loads automatically when Claude touches `.typ` files or you ask about Typst. Two references load on demand: a LaTeX→Typst table, and the visual-loop playbook. |
-| **`ttk` CLI** | On Claude's PATH while the plugin is enabled. You can run it yourself at `~/typst-toolkit/bin/ttk`. |
+| **`ttk` CLI** | On Claude's PATH while the plugin is enabled. From your shell, run `bin/ttk` in the installed copy (`~/.claude/plugins/cache/typst-toolkit/typst-toolkit/<version>/`) or in a clone. |
 | **PostToolUse hook** | After any Edit or Write to a Typst project (`.typ`, `.bib`, data files), it compiles the affected **entrypoint**, runs tinymist lint, and scans the edited file for LaTeX-isms. Errors go back to Claude straight away; warnings only when they change, to avoid noise. |
 | **Stop hook** | Claude can't finish with a broken build in any project it edited. It blocks once, so Claude must either fix the build or explain why it's left broken. |
 | **SessionStart hook** | Creates or refreshes the offline docs mirror in the background (at most 30 days old). |
@@ -212,11 +237,67 @@ examples/verify/                  compiles every construct the LaTeX→Typst ref
 examples/icon/                    source of the plugin icon
 ```
 
-### Maintenance
+### Developing the toolkit
 
-- After upgrading typst, run `ttk docs sync`, then `ttk check examples/verify/cheatsheet-test.typ`.
-  If something in the reference was renamed, this fails.
-- After editing the plugin, run `claude plugin validate ~/typst-toolkit`.
+GitHub `main` is the release channel. Develop and test in a local clone, and push only what has passed
+the checks. Every machine then updates from `main`.
+
+```bash
+git clone https://github.com/SobhanNili/typst-toolkit ~/typst-toolkit
+```
+
+#### Testing locally before pushing
+
+There are three levels, from fastest to most realistic:
+
+1. **The CLI alone.** Most fixes are in `skills/typst/scripts/`. Run them straight from the clone; no Claude
+   session is needed:
+   ```bash
+   ~/typst-toolkit/bin/ttk check path/to/project
+   ~/typst-toolkit/bin/ttk render path/to/project/main.typ --sheet
+   echo '{"tool_name":"Edit","tool_input":{"file_path":"/abs/path/main.typ"},"session_id":"t"}' \
+     | ~/typst-toolkit/bin/ttk hook post      # simulate the PostToolUse hook
+   ```
+2. **The whole plugin from your working tree** (skill, hooks, LSP, `ttk` on PATH), in any project, without
+   installing:
+   ```bash
+   claude plugin disable typst-toolkit@typst-toolkit   # so the installed copy doesn't run hooks twice
+   cd ~/some-typst-project
+   claude --plugin-dir ~/typst-toolkit                 # after edits: /reload-plugins
+   # when done:
+   claude plugin enable typst-toolkit@typst-toolkit
+   ```
+3. **The install and update path itself** (for changes to `plugin.json`, `marketplace.json`, `hooks.json` or
+   `.lsp.json`). Install from the clone as a local marketplace, then switch back. Both marketplaces are named
+   `typst-toolkit`, so only one can be registered at a time:
+   ```bash
+   claude plugin marketplace remove typst-toolkit
+   claude plugin marketplace add ~/typst-toolkit
+   claude plugin install typst-toolkit@typst-toolkit
+   # ...test in a restarted session...
+   claude plugin marketplace remove typst-toolkit
+   claude plugin marketplace add SobhanNili/typst-toolkit
+   claude plugin install typst-toolkit@typst-toolkit
+   ```
+   A local marketplace copies the working tree as it is, uncommitted changes included.
+
+#### Change loop
+
+1. **Report.** When the toolkit misbehaves in another project, have Claude open an issue there with the command,
+   its output and a minimal `.typ` reproduction: `gh issue create -R SobhanNili/typst-toolkit`.
+2. **Fix** in the clone and test it at the level above that fits the change. Add the reproduction under
+   `examples/verify/` so the bug stays fixed.
+3. **Check before pushing:**
+   ```bash
+   claude plugin validate .
+   bin/ttk check examples/report && bin/ttk check examples/slides && bin/ttk check examples/verify
+   ```
+4. **Release.** Bump `version` in `.claude-plugin/plugin.json`, commit, and push to `main`
+   (optionally `claude plugin tag .` to tag it). Then update on each machine as described in
+   [Updating](#updating). Without a version bump, `claude plugin update` treats the plugin as current.
+
+After upgrading typst, run `ttk docs sync`, then `ttk check examples/verify/cheatsheet-test.typ`.
+If something in the LaTeX→Typst reference was renamed, this fails.
 
 ## 7. Troubleshooting
 
