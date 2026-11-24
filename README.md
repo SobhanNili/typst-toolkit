@@ -2,191 +2,112 @@
 
 A Claude Code plugin that makes Claude reliable at Typst. It:
 
-- grounds syntax in the official docs instead of memory or LaTeX habits;
+- looks up syntax in the official docs instead of guessing or falling back on LaTeX habits;
 - reads package APIs from the exact version a project imports;
-- checks every edit with the compiler and tinymist's linter;
-- verifies visual work by rendering it and looking at the result.
+- compiles and lints after every edit;
+- renders pages and figures and inspects them for visual work.
+
+**Contents:** [Install](#install) · [Update](#update) · [Use](#use) · [Packages](#packages) ·
+[Multi-file projects](#multi-file-projects) · [Commands](#commands) · [Develop](#develop) ·
+[Troubleshooting](#troubleshooting)
 
 ---
 
-## 1. Setup
+## Install
 
-### Prerequisites
+**Prerequisites**
 
-| Tool | Needed for | Notes |
-|---|---|---|
-| Claude Code | everything | CLI or the VS Code extension |
-| `python3` ≥ 3.11 | the `ttk` CLI and hooks | standard library only, nothing to `pip install` |
-| `typst` CLI | compiling, rendering, `ttk outline` | snap, cargo, or a release binary all work |
-| tinymist | lint, package docs, language server, fallback compiler | a `tinymist` on PATH **or** the VS Code extension "Tinymist Typst" (its bundled binary is found automatically) |
-
-Network access is used only for `typst.app` (docs mirror) and `packages.typst.org` (package index and downloads).
-
-### Install from GitHub
-
-The plugin is distributed from the `main` branch of
-[SobhanNili/typst-toolkit](https://github.com/SobhanNili/typst-toolkit), which is the single source of truth.
-You don't need a clone to use it.
-
-```bash
-# 1. Register the GitHub repo as a plugin marketplace (tracks its default branch, main)
-claude plugin marketplace add SobhanNili/typst-toolkit
-
-# 2. Install the plugin from it
-claude plugin install typst-toolkit@typst-toolkit
-
-# 3. Restart Claude Code (or run /reload-plugins inside a session)
-```
-
-The same can be done inside a session with `/plugin marketplace add SobhanNili/typst-toolkit` and
-`/plugin install typst-toolkit@typst-toolkit`.
-
-**Verify.** `ttk` is on Claude's PATH while the plugin is enabled, so ask Claude to run `ttk doctor`.
-From your own shell, use the installed copy:
-
-```bash
-~/.claude/plugins/cache/typst-toolkit/typst-toolkit/*/bin/ttk doctor
-~/.claude/plugins/cache/typst-toolkit/typst-toolkit/*/bin/ttk docs sync   # optional; SessionStart does it in the background
-```
-
-### Updating
-
-Installed plugins are versioned copies. A new release is picked up when `version` in
-`.claude-plugin/plugin.json` on `main` has been bumped:
-
-```bash
-claude plugin marketplace update typst-toolkit     # fetch the latest main
-claude plugin update typst-toolkit@typst-toolkit   # install the new version
-# then restart Claude Code (or /reload-plugins)
-```
-
-**Switching from an earlier local-folder install.** Both marketplaces are named `typst-toolkit`, so remove
-the local one first, then run the two install commands above:
-
-```bash
-claude plugin marketplace remove typst-toolkit
-```
-
-`ttk doctor` should show something like:
-
-```
-typst:    /snap/bin/typst  0.15.1
-tinymist: ~/.vscode-server/extensions/myriad-dreamin.tinymist-0.15.12-linux-x64/out/tinymist  (bundles typst 0.15.1)
-packages: data ~/.local/share/typst/packages | cache ~/.cache/typst/packages
-docs mirror: ~/.cache/typst-toolkit/docs/0.15.1 | version 0.15.1 | 218 pages | 0 days old
-```
-
-### How the tools are found
-
-- **typst:** `$TTK_TYPST`, otherwise `typst` on PATH. A snap-confined typst can only read non-hidden
-  paths under `$HOME`. For projects elsewhere (`/tmp`, `/mnt/c/...`), ttk switches to tinymist
-  automatically, since tinymist bundles the same compiler.
-- **tinymist:** `$TTK_TINYMIST`, then `tinymist` on PATH, then the newest VS Code/Cursor extension bundle.
-  This keeps working when the extension updates.
-- **Cache:** `~/.cache/typst-toolkit`. It holds the docs mirror (about 2 MB), the package index,
-  generated package docs and hook state. Override it with `$TTK_CACHE`.
-
----
-
-## 2. What you get
-
-| Component | What it does |
+| Tool | Notes |
 |---|---|
-| **Skill** `typst` | The workflow Claude follows for Typst work. It loads automatically when Claude touches `.typ` files or you ask about Typst. Three references load on demand: a LaTeX→Typst table, the visual-loop playbook, and a curated package list. |
-| **`ttk` CLI** | On Claude's PATH while the plugin is enabled. From your shell, run `bin/ttk` in the installed copy (`~/.claude/plugins/cache/typst-toolkit/typst-toolkit/<version>/`) or in a clone. |
-| **PostToolUse hook** | After any Edit or Write to a Typst project (`.typ`, `.bib`, data files), it compiles the affected **entrypoint**, runs tinymist lint, and scans the edited file for LaTeX-isms. Errors go back to Claude straight away; warnings only when they change, to avoid noise. |
-| **Stop hook** | Claude can't finish with a broken build in any project it edited. It blocks once, so Claude must either fix the build or explain why it's left broken. |
-| **SessionStart hook** | Creates or refreshes the offline docs mirror in the background (at most 30 days old). |
-| **LSP server** | tinymist as Claude's Typst language server: hover docs, go-to-definition and references, including inside packages. |
+| Claude Code | CLI or VS Code extension |
+| `python3` ≥ 3.11 | standard library only |
+| `typst` | any install method (snap, cargo, release binary) |
+| tinymist | `tinymist` on PATH, or the VS Code extension "Tinymist Typst" (found automatically) |
+
+**Install from GitHub** (the `main` branch is the single source of truth; no clone needed):
+
+```bash
+claude plugin marketplace add SobhanNili/typst-toolkit
+claude plugin install typst-toolkit@typst-toolkit
+```
+
+Then restart Claude Code. To check the setup, ask Claude to run `ttk doctor`. It should list typst, tinymist
+and the docs mirror (built in the background on first start).
 
 ---
 
-## 3. Using it
+## Update
 
-You mostly don't call anything yourself. Ask Claude for Typst work as usual ("add a results chapter",
-"make this table match the template", "draw the pipeline with cetz"). The skill makes Claude:
+`/reload-plugins` does **not** fetch anything. It only reloads the copy already installed on your machine
+(`~/.claude/plugins/cache/typst-toolkit/`). Getting a new version from GitHub takes these steps:
 
-1. look up anything it's unsure of in the docs or the package source before writing it;
-2. let the hook compile after each edit, and fix what comes back;
-3. render and inspect pages or figures for anything visual, iterating until the stated goal is met.
+| Step | Who | Command |
+|---|---|---|
+| 1. Publish | maintainer | bump `version` in `.claude-plugin/plugin.json`, commit, push to `main` |
+| 2. Fetch | each machine | `claude plugin marketplace update typst-toolkit` |
+| 3. Install | each machine | `claude plugin update typst-toolkit@typst-toolkit` |
+| 4. Load | each machine | `/reload-plugins` in running sessions, or restart Claude Code |
+
+Always bump the version in step 1: it is how `claude plugin update` reliably sees a new release, and it
+tells you which release each machine runs. Check the installed version with `claude plugin list`.
+
+> **Switching from an old local-folder install?** Run `claude plugin marketplace remove typst-toolkit` first
+> (both sources share the name), then the two install commands above.
+
+---
+
+## Use
+
+Ask Claude for Typst work as usual. The plugin works in the background:
+
+| Part | What it does |
+|---|---|
+| **Skill** | Loads for any Typst work. Tells Claude to look things up before writing them, never write LaTeX, compile after edits and inspect renders. Loads three references on demand: LaTeX→Typst table, visual-loop playbook, curated package list. |
+| **After-edit hook** | Compiles the affected entrypoint, runs tinymist lint and scans for LaTeX-isms after every edit. Errors go straight back to Claude. |
+| **Stop hook** | Claude can't finish with a broken build without fixing it or explaining why. |
+| **Session-start hook** | Keeps an offline copy of typst.app/docs up to date (refreshed every 30 days). |
+| **Language server** | tinymist gives Claude hover docs and go-to-definition, including inside packages. |
+| **`ttk` CLI** | The commands behind all of this; on Claude's PATH (see [Commands](#commands)). |
 
 Prompts that work well:
 
 - *"Design a title page for the template; render it and iterate until it looks right."*
 - *"Convert `paper.tex` to Typst; check every math command against the symbol table."*
 - *"Upgrade cetz to the latest version; check what changed in the API before editing the figures."*
-- *"The figure on page 4 has overlapping labels — zoom in and fix it."*
+- *"The figure on page 4 has overlapping labels. Zoom in and fix it."*
 
-### `ttk` command reference
+**Examples** in this repo, each a working reference:
 
-```bash
-# Official docs (local mirror of typst.app/docs, matched to the latest Typst release)
-ttk docs show grid                 # whole page
-ttk docs show text -s font         # one parameter/section
-ttk docs show page --outline       # headings only
-ttk docs search 'first-line-indent' [--within guides] [--files]
-ttk docs sym '\leq'                # LaTeX command / Typst name / Unicode words → symbol
-ttk docs show for-latex-users      # official migration guide
-ttk docs sync | status | path | fetch <url>
-
-# Packages (Typst Universe)
-ttk pkg search slides presentation
-ttk pkg info touying               # versions, compiler min, repo/homepage, exports, local path
-ttk pkg readme cetz:0.3.4
-ttk pkg api cetz:0.3.4 rect        # signature + doc comments from source
-ttk pkg grep touying:0.8.0 'config-info'
-ttk pkg docs touying:0.8.0         # full generated API docs (tinymist) → a .md file to grep
-ttk pkg deps .                     # imports in this project: cached? outdated? mixed versions?
-
-# Project, checking, rendering
-ttk project [path]                 # root, entrypoints, include/import tree, packages
-ttk check [file|dir] [--main m.typ] [--no-lint] [--no-latex]
-ttk outline main.typ               # headings/figures/labels with page numbers
-ttk render main.typ [-p 2-3] [--ppi 110]
-ttk render main.typ --sheet        # contact sheet of all pages
-ttk render main.typ -p 2 --compare # before/after vs the previous render
-ttk render main.typ -p 2 --region 0,0.5,1,1   # zoomed crop (x0,y0,x1,y1 as page fractions)
-ttk snippet figures/arch.typ       # one figure on an auto-sized page
-ttk snippet -e '#table(columns: 2, [a], [b])'
-ttk latex-scan chapters/*.typ
-```
-
-Renders go to `<project root>/.typst-preview/`, which contains its own `.gitignore`.
+| Folder | Shows |
+|---|---|
+| `examples/report/` | multi-file document: template, chapters, cetz figure, bibliography |
+| `examples/slides/` | touying deck (metropolis theme): reveals, animated cetz, math, speaker notes |
+| `examples/verify/` | compiles every construct the LaTeX→Typst reference recommends |
 
 ---
 
-## 4. Third-party packages (touying, cetz, fletcher, …)
+## Packages
 
-Claude's memory of package APIs is the least reliable thing of all, because these packages change faster
-than Typst itself. cetz 0.2 → 0.3 → 0.4 and touying 0.5 → 0.8 all had breaking changes. So the toolkit
-never lets Claude rely on memory. Here's how a package's syntax and docs are determined:
+### How Claude gets a package's API right
 
-1. **The version comes from the project.** `ttk pkg deps` / `ttk project` read the
-   `#import "@preview/name:x.y.z"` lines. Everything below uses that exact version; the latest is used
-   only for new imports. `ttk pkg info` also shows the package's minimum `compiler` version and the
-   newer versions available.
-2. **The source is local.** Packages live in typst's package cache (`~/.cache/typst/packages/preview/<name>/<ver>`),
-   and ttk downloads them there if needed, the same place typst itself uses. That gives Claude:
-   - `pkg readme`: the author's usage guide and idioms for that version;
-   - `pkg api <symbol>`: the real `#let` definition, with parameter names, defaults and `///` doc comments;
-   - `pkg grep`: examples, themes, internals (e.g. how a touying theme builds its title slide);
-   - `pkg docs`: tinymist's full generated API reference (types, defaults, docs for every public symbol).
-3. **Hover/definition via the LSP.** In a file that imports the package, tinymist resolves symbols against
-   the pinned version. Hovering `canvas` shows cetz 0.3.4's signature and parameter docs.
-4. **External manuals.** Some packages keep their main docs outside the package (cetz: cetz-package.github.io;
-   touying: touying-typ.github.io; many ship a `manual.pdf` in their repo). `pkg info` prints the
-   `homepage`/`repository` links and Claude fetches those pages when the README is thin. These are often
-   written for the *latest* version, so the local source stays the source of truth when they disagree.
-5. **The compiler is the final check.** Wrong parameter names fail immediately ("unexpected argument"),
-   the hook reports them, and the visual loop catches anything that compiles but looks wrong.
-   The skill also has Claude prototype new package usage in a `ttk snippet` before adding it to the document.
+Package APIs change faster than Typst itself (cetz and touying both had breaking releases recently), so
+Claude never uses them from memory:
 
-Local packages (`@local/...`, in `~/.local/share/typst/packages`) work the same way, without the download.
+1. **Version from the project.** The version in the project's `#import "@preview/name:x.y.z"` is the one
+   used everywhere. The latest version is only used for new imports.
+2. **Docs from the package source.** ttk reads the package from typst's own cache (downloading it if
+   needed): `pkg readme` for usage, `pkg api <symbol>` for exact signatures and doc comments, `pkg grep` for
+   examples, `pkg docs` for the full generated reference.
+3. **Language server.** Hover in a file that imports the package shows that version's docs.
+4. **Online manuals** (e.g. cetz, touying) are read when the README is thin. The local source wins if they
+   disagree, since manuals often describe only the latest version.
+5. **Compiler and renders.** Wrong parameters fail at compile time; layout problems show in the render.
 
-### Which packages Claude reaches for
+### Curated package list
 
-So that Claude uses a maintained package instead of drawing everything by hand,
-[`skills/typst/references/packages.md`](skills/typst/references/packages.md) lists curated packages per task:
+So Claude uses an existing package instead of building everything by hand,
+[`skills/typst/references/packages.md`](skills/typst/references/packages.md) lists the recommended packages
+per task:
 
 | Task | Packages |
 |---|---|
@@ -196,134 +117,147 @@ So that Claude uses a maintained package instead of drawing everything by hand,
 | Math and scientific writing | `physica`, `unify` / `zero`, `equate`, `numera`, `theorion` / `ctheorems`, `subpar` |
 | Slides and posters | `touying`, `peace-of-posters` |
 
-It also names domain-specific packages (circuits, chemistry, quantum, automata, sequence diagrams, paper
-templates) and a few to avoid. The list holds no version numbers: a package the project already imports
-wins, and otherwise Claude takes the latest version from `ttk pkg info` and reads its docs before using it.
-All listed packages were checked to import on Typst 0.15.1. To change the selection, edit that file.
+It also lists domain-specific packages (circuits, chemistry, quantum, automata, paper templates) and some
+to avoid. The list has no version numbers, so it doesn't go stale. Edit that file to change the selection.
 
 ---
 
-### Example: the slides deck
+## Multi-file projects
 
-`examples/slides/` was built with exactly this workflow and is a good template for decks:
-
-- `touying:0.8.0` with the metropolis theme; it needs Typst ≥ 0.15 (`ttk pkg info touying` shows the `compiler` field).
-- The README showed that 0.8 animates cetz through `touying-reduce.with(cetz)` (the old `touying-reducer`
-  API changed), and that it pairs with `cetz:0.5.2`. Theme options came from `ttk pkg api touying:0.8.0 metropolis-theme`.
-- `figures/architecture.typ` is a static cetz figure that sizes its boxes from their labels.
-  The first render showed the labels overflowing fixed-size boxes; that was fixed with `content(..., frame: "rect")`
-  after checking `ttk pkg api cetz:0.5.2 content`, and then sized on the slide with `--compare` renders.
-- Every animation step is a separate PDF page. Use `ttk render examples/slides/main.typ --sheet` to see the
-  whole deck at once, then `-p N` for individual slides.
-
-## 5. Multi-file projects
-
-- **Entrypoints** are inferred from the include/import graph (`.typ` files nobody references). `typst.toml`
-  template and package entrypoints are also recognised. Edits to a chapter are checked **through its
-  entrypoint**, so you never get false "unknown label" errors from compiling a chapter alone.
-- **Use relative paths** (`#include "../figures/a.typ"`). A path starting with `/` is relative to the
-  compile root, and tools choose that root differently: ttk uses the folder with `typst-toolkit.toml` or
-  `typst.toml`, while tinymist in VS Code uses the workspace folder. `ttk check` warns when root-absolute
-  paths could resolve differently in your editor. If you want `/` paths, make the roots agree (open the
-  project folder itself in VS Code, or set tinymist's `rootPath`).
-- **Optional config** `typst-toolkit.toml` at the project root, for when the guess is ambiguous:
+- **Entrypoints are found automatically** from the include/import graph. An edited chapter is always compiled
+  through its main file, so there are no false "unknown label" errors.
+- **Use relative paths** (`#include "../figures/a.typ"`). Paths starting with `/` depend on the compile
+  root, which VS Code's tinymist and the CLI may choose differently. `ttk check` warns when this can happen.
+- **Fonts:** for documents that must also look right on typst.app, put font files in the project
+  (e.g. `fonts/`) and list that folder under `font-paths` (see below).
+- **Optional `typst-toolkit.toml`** at the project root, when the automatic guess is wrong:
 
 ```toml
-main = ["main.typ"]          # one or more entrypoints
-root = "."                   # compiler --root (for "/..." paths)
+main = ["main.typ"]      # entrypoint(s)
+root = "."               # compile root, for "/..." paths
 font-paths = ["fonts"]
-ppi = 110                    # default render resolution
-[inputs]                     # sys.inputs
+ppi = 110                # default render resolution
+[inputs]                 # sys.inputs
 draft = "true"
 ```
 
 ---
 
-## 6. Repository layout
+## Commands
 
+Claude runs these itself; they are listed here for reference and for your own use. From your shell, run
+`bin/ttk` inside a clone of this repo.
+
+```bash
+# Official docs (offline mirror of typst.app/docs)
+ttk docs show grid                 # a page;  -s font for one parameter;  --outline for headings
+ttk docs search 'first-line-indent'
+ttk docs sym '\leq'                # LaTeX command / Typst name / Unicode words → symbol
+ttk docs sync                      # refresh the mirror
+
+# Packages
+ttk pkg search diagram arrows
+ttk pkg info touying               # versions, minimum compiler, links
+ttk pkg readme cetz:0.5.2
+ttk pkg api cetz:0.5.2 content     # signature + doc comments from source
+ttk pkg grep touying:0.8.0 'config-info'
+ttk pkg docs touying:0.8.0         # full API reference → .md file
+ttk pkg deps .                     # project imports: cached? outdated? mixed versions?
+
+# Checking and rendering  (output goes to <project>/.typst-preview/, git-ignored)
+ttk check [file|dir]               # compile + lint + LaTeX scan
+ttk project                        # entrypoints and include/import tree
+ttk outline main.typ               # headings, figures, labels with page numbers
+ttk render main.typ -p 2           # page → PNG
+ttk render main.typ --sheet        # all pages on one image
+ttk render main.typ -p 2 --compare # before / after
+ttk render main.typ -p 2 --region 0,0.5,1,1   # zoomed crop (page fractions)
+ttk snippet figures/arch.typ       # one figure on an auto-sized page
+ttk snippet -e '#table(columns: 2, [a], [b])'
 ```
-.claude-plugin/{plugin,marketplace}.json, icon.png
-.lsp.json                         tinymist language server registration
-hooks/hooks.json                  PostToolUse / Stop / SessionStart
-bin/ttk, bin/ttk-tinymist         wrappers (on Claude's PATH)
-skills/typst/SKILL.md             workflow + command reference
-skills/typst/references/          latex-to-typst.md, visual-loop.md, packages.md
-skills/typst/scripts/             ttk + ttk_{common,docs,pkg,build,hooks}.py
-examples/report/                  multi-file demo: template, chapters, cetz figure, bibliography
-examples/slides/                  touying 0.8 deck (metropolis theme): reveals, animated cetz, math, notes
-examples/verify/                  compiles every construct the LaTeX→Typst reference recommends
-examples/icon/                    source of the plugin icon
-```
 
-### Developing the toolkit
+---
 
-GitHub `main` is the release channel. Develop and test in a local clone, and push only what has passed
-the checks. Every machine then updates from `main`.
+## Develop
+
+Changes are made in a local clone, tested locally, then pushed to `main` and installed on each machine as in
+[Update](#update).
 
 ```bash
 git clone https://github.com/SobhanNili/typst-toolkit ~/typst-toolkit
 ```
 
-#### Testing locally before pushing
+### Test locally before pushing
 
-There are three levels, from fastest to most realistic:
+Pick the lightest level that covers the change:
 
-1. **The CLI alone.** Most fixes are in `skills/typst/scripts/`. Run them straight from the clone; no Claude
-   session is needed:
-   ```bash
-   ~/typst-toolkit/bin/ttk check path/to/project
-   ~/typst-toolkit/bin/ttk render path/to/project/main.typ --sheet
-   echo '{"tool_name":"Edit","tool_input":{"file_path":"/abs/path/main.typ"},"session_id":"t"}' \
-     | ~/typst-toolkit/bin/ttk hook post      # simulate the PostToolUse hook
-   ```
-2. **The whole plugin from your working tree** (skill, hooks, LSP, `ttk` on PATH), in any project, without
-   installing:
-   ```bash
-   claude plugin disable typst-toolkit@typst-toolkit   # so the installed copy doesn't run hooks twice
-   cd ~/some-typst-project
-   claude --plugin-dir ~/typst-toolkit                 # after edits: /reload-plugins
-   # when done:
-   claude plugin enable typst-toolkit@typst-toolkit
-   ```
-3. **The install and update path itself** (for changes to `plugin.json`, `marketplace.json`, `hooks.json` or
-   `.lsp.json`). Install from the clone as a local marketplace, then switch back. Both marketplaces are named
-   `typst-toolkit`, so only one can be registered at a time:
-   ```bash
-   claude plugin marketplace remove typst-toolkit
-   claude plugin marketplace add ~/typst-toolkit
-   claude plugin install typst-toolkit@typst-toolkit
-   # ...test in a restarted session...
-   claude plugin marketplace remove typst-toolkit
-   claude plugin marketplace add SobhanNili/typst-toolkit
-   claude plugin install typst-toolkit@typst-toolkit
-   ```
-   A local marketplace copies the working tree as it is, uncommitted changes included.
+**1. The CLI only.** For changes in `skills/typst/scripts/`:
 
-#### Change loop
+```bash
+~/typst-toolkit/bin/ttk check path/to/project
+echo '{"tool_name":"Edit","tool_input":{"file_path":"/abs/path/main.typ"},"session_id":"t"}' \
+  | ~/typst-toolkit/bin/ttk hook post          # simulate the after-edit hook
+```
 
-1. **Report.** When the toolkit misbehaves in another project, have Claude open an issue there with the command,
-   its output and a minimal `.typ` reproduction: `gh issue create -R SobhanNili/typst-toolkit`.
-2. **Fix** in the clone and test it at the level above that fits the change. Add the reproduction under
-   `examples/verify/` so the bug stays fixed.
-3. **Check before pushing:**
+**2. The whole plugin from your clone.** For changes to the skill, references or hooks. Nothing is
+installed; edits apply after `/reload-plugins`:
+
+```bash
+claude plugin disable typst-toolkit@typst-toolkit    # avoid running two copies
+cd ~/some-typst-project && claude --plugin-dir ~/typst-toolkit
+claude plugin enable typst-toolkit@typst-toolkit     # when done
+```
+
+**3. The install itself.** For changes to `plugin.json`, `marketplace.json`, `hooks.json` or `.lsp.json`.
+Install from the clone (uncommitted changes included), then switch back to GitHub:
+
+```bash
+claude plugin marketplace remove typst-toolkit
+claude plugin marketplace add ~/typst-toolkit && claude plugin install typst-toolkit@typst-toolkit
+# ...test in a restarted session, then:
+claude plugin marketplace remove typst-toolkit
+claude plugin marketplace add SobhanNili/typst-toolkit && claude plugin install typst-toolkit@typst-toolkit
+```
+
+### Release checklist
+
+1. When the toolkit misbehaves elsewhere, record it with a minimal reproduction:
+   `gh issue create -R SobhanNili/typst-toolkit`.
+2. Fix it in the clone; add the reproduction under `examples/verify/`.
+3. Check:
    ```bash
    claude plugin validate .
    bin/ttk check examples/report && bin/ttk check examples/slides && bin/ttk check examples/verify
    ```
-4. **Release.** Bump `version` in `.claude-plugin/plugin.json`, commit, and push to `main`
-   (optionally `claude plugin tag .` to tag it). Then update on each machine as described in
-   [Updating](#updating). Without a version bump, `claude plugin update` treats the plugin as current.
+4. Bump `version` in `.claude-plugin/plugin.json`, commit, push to `main`.
+5. On each machine: steps 2–4 of [Update](#update).
 
-After upgrading typst, run `ttk docs sync`, then `ttk check examples/verify/cheatsheet-test.typ`.
-If something in the LaTeX→Typst reference was renamed, this fails.
+After upgrading typst itself: `ttk docs sync`, then `ttk check examples/verify`.
 
-## 7. Troubleshooting
+### Repository layout
 
-| Symptom | Cause / fix |
+```
+.claude-plugin/        plugin.json, marketplace.json, icon
+.lsp.json              tinymist language server
+hooks/hooks.json       after-edit, stop and session-start hooks
+bin/                   ttk and ttk-tinymist wrappers
+skills/typst/          SKILL.md, references/, scripts/ (the ttk implementation)
+examples/              report, slides, verify, icon
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
 |---|---|
-| `input file not found` from typst for a project in `/tmp` or `/mnt/...` | Snap confinement. ttk falls back to tinymist automatically; for your own shell use a non-snap typst. |
-| VS Code shows `file not found (searched at <workspace>/...)` but `ttk check` passes | A root-absolute `"/..."` path with a different editor root. Use relative paths (see §5). |
-| `unknown font family` warning | The font isn't installed. Check `typst fonts`; add a `font-paths` entry in `typst-toolkit.toml`. |
-| Hook didn't run | The plugin must be enabled and Claude Code restarted (`/reload-plugins`). |
-| `docs mirror not found` | `ttk docs sync`, or wait for the SessionStart background sync (log: `~/.cache/typst-toolkit/sync.log`). |
-| Wrong entrypoint picked | Add `main = [...]` to `typst-toolkit.toml`. |
+| A change on GitHub isn't active | `/reload-plugins` doesn't fetch. Run steps 2–4 of [Update](#update), and check that the version was bumped. |
+| Hooks don't run | Plugin not enabled or Claude Code not restarted. Check `claude plugin list`. |
+| VS Code says `file not found` but `ttk check` passes | A `/...` path resolved against a different root. Use relative paths. |
+| `input file not found` for a project in `/tmp` or `/mnt/...` | Snap-installed typst can't read there. ttk falls back to tinymist automatically. |
+| `unknown font family` | Font not installed. Check `typst fonts`, or add a `font-paths` folder in `typst-toolkit.toml`. |
+| `docs mirror not found` | Run `ttk docs sync`, or wait for the background sync (log: `~/.cache/typst-toolkit/sync.log`). |
+| Wrong entrypoint | Set `main = [...]` in `typst-toolkit.toml`. |
+
+Tool lookup, if something isn't found: typst from `$TTK_TYPST` or PATH; tinymist from `$TTK_TINYMIST`, PATH,
+or the newest VS Code extension; cache in `~/.cache/typst-toolkit` (override with `$TTK_CACHE`).
