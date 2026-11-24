@@ -92,7 +92,7 @@ docs mirror: ~/.cache/typst-toolkit/docs/0.15.1 | version 0.15.1 | 218 pages | 0
 
 | Component | What it does |
 |---|---|
-| **Skill** `typst` | The workflow Claude follows for Typst work. It loads automatically when Claude touches `.typ` files or you ask about Typst. Two references load on demand: a LaTeX→Typst table, and the visual-loop playbook. |
+| **Skill** `typst` | The workflow Claude follows for Typst work. It loads automatically when Claude touches `.typ` files or you ask about Typst. Three references load on demand: a LaTeX→Typst table, the visual-loop playbook, and a curated package list. |
 | **`ttk` CLI** | On Claude's PATH while the plugin is enabled. From your shell, run `bin/ttk` in the installed copy (`~/.claude/plugins/cache/typst-toolkit/typst-toolkit/<version>/`) or in a clone. |
 | **PostToolUse hook** | After any Edit or Write to a Typst project (`.typ`, `.bib`, data files), it compiles the affected **entrypoint**, runs tinymist lint, and scans the edited file for LaTeX-isms. Errors go back to Claude straight away; warnings only when they change, to avoid noise. |
 | **Stop hook** | Claude can't finish with a broken build in any project it edited. It blocks once, so Claude must either fix the build or explain why it's left broken. |
@@ -183,6 +183,24 @@ never lets Claude rely on memory. Here's how a package's syntax and docs are det
 
 Local packages (`@local/...`, in `~/.local/share/typst/packages`) work the same way, without the download.
 
+### Which packages Claude reaches for
+
+So that Claude uses a maintained package instead of drawing everything by hand,
+[`skills/typst/references/packages.md`](skills/typst/references/packages.md) lists curated packages per task:
+
+| Task | Packages |
+|---|---|
+| Figures and diagrams | `cetz`, `fletcher`, `diagraph`, `neural-netz` |
+| Plots | `lilaq`, `cetz-plot` |
+| Algorithms and code | `algorithmic`, `lovelace`, `codly` |
+| Math and scientific writing | `physica`, `unify` / `zero`, `equate`, `numera`, `theorion` / `ctheorems`, `subpar` |
+| Slides and posters | `touying`, `peace-of-posters` |
+
+It also names domain-specific packages (circuits, chemistry, quantum, automata, sequence diagrams, paper
+templates) and a few to avoid. The list holds no version numbers: a package the project already imports
+wins, and otherwise Claude takes the latest version from `ttk pkg info` and reads its docs before using it.
+All listed packages were checked to import on Typst 0.15.1. To change the selection, edit that file.
+
 ---
 
 ### Example: the slides deck
@@ -229,7 +247,7 @@ draft = "true"
 hooks/hooks.json                  PostToolUse / Stop / SessionStart
 bin/ttk, bin/ttk-tinymist         wrappers (on Claude's PATH)
 skills/typst/SKILL.md             workflow + command reference
-skills/typst/references/          latex-to-typst.md, visual-loop.md
+skills/typst/references/          latex-to-typst.md, visual-loop.md, packages.md
 skills/typst/scripts/             ttk + ttk_{common,docs,pkg,build,hooks}.py
 examples/report/                  multi-file demo: template, chapters, cetz figure, bibliography
 examples/slides/                  touying 0.8 deck (metropolis theme): reveals, animated cetz, math, notes

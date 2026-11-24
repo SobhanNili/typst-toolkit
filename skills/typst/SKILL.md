@@ -70,6 +70,9 @@ Set/show rules, `context`, introspection and counters are the usual traps — re
    `main = ["main.typ"]` (also supports `root`, `font-paths`, `ppi`, `[inputs]`).
 
 **Using a package**
+0. Don't reinvent what a package does well. Before building a figure, plot, neural-net diagram, pseudocode,
+   theorem environments, subfigures, per-chapter numbering, units, code listings, slides or a poster from
+   scratch, read `references/packages.md` (curated packages per task + selection rules).
 1. `ttk pkg search` → `ttk pkg info name` (check `compiler` min version vs `ttk doctor`).
 2. Read `ttk pkg readme name:ver` for idioms, then `ttk pkg api name:ver <symbol>` for exact parameters
    (or LSP hover on the symbol in a file that imports it: same doc comments, resolved for the pinned version).
